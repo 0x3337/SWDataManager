@@ -40,8 +40,11 @@ public class SWDataManager {
 
 extension SWDataManager {
   private func entityName<O: NSManagedObject>(for object: O.Type) -> String {
-    let entityName = String(describing: object)
-    return String(entityName.dropLast(2))
+    if let object = object as? SWEntityNamable.Type {
+      return object.entityName
+    }
+
+    return String(describing: object)
   }
 }
 
