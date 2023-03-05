@@ -21,10 +21,10 @@ public class SWDataManager {
   }()
 
   public lazy var context: NSManagedObjectContext = {
-    let c = persistentContainer.viewContext
-    c.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+    let context = persistentContainer.viewContext
+    context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
 
-    return c
+    return context
   }()
 
   public lazy var backgroundContext: NSManagedObjectContext = {
