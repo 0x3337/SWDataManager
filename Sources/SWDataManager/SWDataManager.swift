@@ -133,7 +133,16 @@ extension SWDataManager {
 }
 
 extension SWDataManager {
-  public func aggregate<O: NSManagedObject>(for object: O.Type, attributes: [SWDataAttribute], predicate: NSPredicate? = nil, groupBy groups: [Any]? = nil) -> [Any] {
+  public func aggregate<O: NSManagedObject>(
+    for object: O.Type,
+    attributes: [SWDataAttribute],
+    where predicate: NSPredicate? = nil,
+    groupBy groups: [Any]? = nil,
+    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
+    having havingPredicate: NSPredicate? = nil,
+    limit: Int = 0,
+    offset: Int = 0
+  ) -> [Any] {
     var properties = [Any]()
 
     for attribute in attributes {
@@ -152,13 +161,18 @@ extension SWDataManager {
       properties.append(description)
     }
 
-    let req = request(for: object, predicate: predicate) as! NSFetchRequest<NSFetchRequestResult>
-    req.resultType = .dictionaryResultType
-    req.returnsObjectsAsFaults = false
-    req.propertiesToFetch = properties
-    req.propertiesToGroupBy = groups
+    let entityName = entityName(for: object)
+    let request = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
+    request.resultType = .dictionaryResultType
+    request.returnsObjectsAsFaults = false
+    request.propertiesToFetch = properties
+    request.propertiesToGroupBy = groups
+    request.havingPredicate = havingPredicate
+    request.sortDescriptors = sortDescriptors
+    request.fetchLimit = limit
+    request.fetchOffset = offset
 
-    return try! context.fetch(req)
+    return try! context.fetch(request)
   }
 }
 
