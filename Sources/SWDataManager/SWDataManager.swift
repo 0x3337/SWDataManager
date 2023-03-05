@@ -54,22 +54,6 @@ extension SWDataManager {
 }
 
 extension SWDataManager {
-  public func count<O: NSManagedObject>(for object: O.Type, format predicateFormat: String? = nil, _ args: CVarArg...) -> Int {
-    var predicate: NSPredicate?
-
-    if let predicateFormat = predicateFormat {
-      predicate = NSPredicate(format: predicateFormat, argumentArray: args)
-    }
-
-    let req = request(for: object, where: predicate)
-
-    do {
-      return try context.count(for: req)
-    } catch {
-      return 0
-    }
-  }
-
   public func object(with objectID: NSManagedObjectID) -> NSManagedObject {
     return context.object(with: objectID)
   }
@@ -147,6 +131,16 @@ extension SWDataManager {
 }
 
 extension SWDataManager {
+  public func count<O: NSManagedObject>(for object: O.Type, where predicate: NSPredicate? = nil) -> Int {
+    let request = request(for: object, where: predicate)
+
+    return (try? context.count(for: request)) ?? 0
+  }
+
+  public func count<O: NSManagedObject>(for object: O.Type, whereFormat predicateFormat: String, _ args: CVarArg...) -> Int {
+    return count(for: object, where: NSPredicate(format: predicateFormat, argumentArray: args))
+  }
+
   public func aggregate<O: NSManagedObject>(
     for object: O.Type,
     attributes: [SWDataAttribute],
