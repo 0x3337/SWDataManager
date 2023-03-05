@@ -9,35 +9,28 @@ import CoreData
 
 public class SWDataAttribute: NSObject, ExpressibleByStringLiteral {
   let value: String
-  let name: String?
-  let function: SWAggregateFunction?
-  let resultType: NSAttributeType?
+
+  init(_ value: String, nameAs name: String? = nil) {
+    self.value = value
+  }
 
   required convenience public init(stringLiteral value: String) {
     self.init(value)
   }
 
-  init(_ value: String, withFunction function: SWAggregateFunction? = nil, nameAs name: String? = nil, resultType: NSAttributeType? = nil) {
-    self.value = value
-    self.name = name
-    self.function = function
-    self.resultType = resultType
+  public class func sum(_ value: String, as name: String = "sum", resultType: NSAttributeType) -> SWDataAttribute {
+    return SWDataExpression(value, as: name, function: .sum, resultType: resultType)
   }
 
-  public class func sum(_ value: String, nameAs name: String? = "sum", resultType: NSAttributeType) -> SWDataAttribute {
-    return SWDataAttribute(value, withFunction: .sum, nameAs: name, resultType: resultType)
+  public class func count(_ value: String, as name: String = "count", resultType: NSAttributeType) -> SWDataAttribute {
+    return SWDataExpression(value, as: name, function: .count, resultType: resultType)
   }
 
-  public class func count(_ value: String, nameAs name: String? = "count", resultType: NSAttributeType) -> SWDataAttribute {
-    return SWDataAttribute(value, withFunction: .count, nameAs: name, resultType: resultType)
+  public class func min(_ value: String, as name: String = "min", resultType: NSAttributeType) -> SWDataAttribute {
+    return SWDataExpression(value, as: name, function: .min, resultType: resultType)
   }
 
-  public class func min(_ value: String, nameAs name: String? = "min", resultType: NSAttributeType) -> SWDataAttribute {
-    return SWDataAttribute(value, withFunction: .min, nameAs: name, resultType: resultType)
-  }
-
-  public class func max(_ value: String, nameAs name: String? = "max", resultType: NSAttributeType) -> SWDataAttribute {
-    return SWDataAttribute(value, withFunction: .max, nameAs: name, resultType: resultType)
+  public class func max(_ value: String, as name: String = "max", resultType: NSAttributeType) -> SWDataAttribute {
+    return SWDataExpression(value, as: name, function: .max, resultType: resultType)
   }
 }
-

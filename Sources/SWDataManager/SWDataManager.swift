@@ -137,18 +137,19 @@ extension SWDataManager {
     var properties = [Any]()
 
     for attribute in attributes {
-      if let name = attribute.name, let function = attribute.function, let resultType = attribute.resultType {
-        let description = NSExpressionDescription()
-        description.name = name
-        description.expressionResultType = resultType
-        description.expression = NSExpression(forFunction: "\(function.rawValue):", arguments: [
-          NSExpression(forKeyPath: attribute.value)
-        ])
-
-        properties.append(description)
-      } else {
+      guard let expression = attribute as? SWDataExpression else {
         properties.append(attribute.value)
+        continue
       }
+
+      let description = NSExpressionDescription()
+      description.name = expression.name
+      description.expressionResultType = expression.resultType
+      description.expression = NSExpression(forFunction: "\(expression.function.rawValue):", arguments: [
+        NSExpression(forKeyPath: expression.value)
+      ])
+
+      properties.append(description)
     }
 
     let req = request(for: model, predicate: predicate) as! NSFetchRequest<NSFetchRequestResult>
