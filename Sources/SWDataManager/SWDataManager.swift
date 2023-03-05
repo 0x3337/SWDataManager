@@ -47,9 +47,29 @@ extension SWDataManager {
 
 extension SWDataManager {
   public func insert<O: NSManagedObject>(for object: O.Type) -> O {
-    let name = entityName(for: object)
+    let entityName = entityName(for: object)
 
-    return NSEntityDescription.insertNewObject(forEntityName: name, into: context) as! O
+    return NSEntityDescription.insertNewObject(forEntityName: entityName, into: context) as! O
+  }
+}
+
+extension SWDataManager {
+  public func delete(_ object: NSManagedObject) {
+    context.delete(object)
+  }
+
+  public func delete(by objectID: NSManagedObjectID) {
+    let object = context.object(with: objectID)
+
+    delete(object)
+  }
+
+  public func delete<O: NSManagedObject>(_ object: O.Type, predicate: NSPredicate? = nil) {
+    let objects = fetch(object, where: predicate)
+
+    for object in objects {
+      delete(object)
+    }
   }
 }
 
@@ -108,25 +128,6 @@ extension SWDataManager {
     }
 
     return fetchedResultsController
-  }
-}
-
-extension SWDataManager {
-  public func delete(_ object: NSManagedObject) {
-    context.delete(object)
-  }
-
-  public func delete(by objectID: NSManagedObjectID) {
-    let object = context.object(with: objectID)
-    delete(object)
-  }
-
-  public func delete<O: NSManagedObject>(_ object: O.Type, predicate: NSPredicate? = nil) {
-    let objects = fetch(object, where: predicate)
-
-    for object in objects {
-      delete(object)
-    }
   }
 }
 
