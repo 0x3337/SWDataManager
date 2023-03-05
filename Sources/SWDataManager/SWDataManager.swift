@@ -61,7 +61,7 @@ extension SWDataManager {
       predicate = NSPredicate(format: predicateFormat, argumentArray: args)
     }
 
-    let req = request(for: object, predicate: predicate)
+    let req = request(for: object, where: predicate)
 
     do {
       return try context.count(for: req)
@@ -74,34 +74,48 @@ extension SWDataManager {
     return context.object(with: objectID)
   }
 
-  public func request<O: NSManagedObject>(for object: O.Type, limit: Int? = nil, predicate: NSPredicate? = nil, sorts: [NSSortDescriptor]? = nil) -> NSFetchRequest<O> {
-    let name = entityName(for: object)
-    let request = NSFetchRequest<O>(entityName: name)
-
+  public func request<O: NSManagedObject>(
+    for object: O.Type,
+    where predicate: NSPredicate? = nil,
+    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
+    limit: Int = 0,
+    offset: Int = 0
+  ) -> NSFetchRequest<O> {
+    let entityName = entityName(for: object)
+    let request = NSFetchRequest<O>(entityName: entityName)
     request.predicate = predicate
-    request.sortDescriptors = sorts
-
-    if let limit = limit {
-      request.fetchLimit = limit
-    }
+    request.sortDescriptors = sortDescriptors
+    request.fetchLimit = limit
+    request.fetchOffset = offset
 
     return request
   }
 
+  public func fetch<O: NSManagedObject>(
+    _ object: O.Type,
+    where predicate: NSPredicate? = nil,
+    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
+    limit: Int = 0,
+    offset: Int = 0
+  ) -> [O] {
+    let request = request(for: object, where: predicate, orderBy: sortDescriptors, limit: limit, offset: offset)
 
-  public func fetch<O: NSManagedObject>(for object: O.Type, limit: Int? = nil, predicate: NSPredicate? = nil, sorts: [NSSortDescriptor]? = nil) -> [O] {
-    let req = request(for: object, limit: limit, predicate: predicate, sorts: sorts)
-
-    return try! context.fetch(req)
+    return try! context.fetch(request)
   }
 
-  public func fetch<O: NSManagedObject>(for object: O.Type, format predicateFormat: String, _ args: CVarArg...) -> [O] {
-    return fetch(for: object, predicate: NSPredicate(format: predicateFormat, argumentArray: args))
+  public func fetch<O: NSManagedObject>(_ object: O.Type, whereFormat predicateFormat: String, _ args: CVarArg...) -> [O] {
+    return fetch(object, where: NSPredicate(format: predicateFormat, argumentArray: args))
   }
 
-  public func resultsController<O: NSManagedObject>(for object: O.Type, limit: Int? = nil, predicate: NSPredicate? = nil, sorts: [NSSortDescriptor]) -> NSFetchedResultsController<O> {
-    let req = request(for: object, limit: limit, predicate: predicate, sorts: sorts)
-    let fetchedResultsController = NSFetchedResultsController(fetchRequest: req, managedObjectContext: context, sectionNameKeyPath: nil, cacheName: nil)
+  public func resultsController<O: NSManagedObject>(
+    for object: O.Type,
+    where predicate: NSPredicate? = nil,
+    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
+    limit: Int = 0,
+    offset: Int = 0
+  ) -> NSFetchedResultsController<O> {
+    let request = request(for: object, where: predicate, orderBy: sortDescriptors, limit: limit, offset: offset)
+    let fetchedResultsController = NSFetchedResultsController(fetchRequest: request, managedObjectContext: context, sectionNameKeyPath: nil, cacheName: nil)
 
     do {
       try fetchedResultsController.performFetch()
@@ -123,8 +137,8 @@ extension SWDataManager {
     delete(object)
   }
 
-  public func delete<O: NSManagedObject>(for object: O.Type, predicate: NSPredicate? = nil) {
-    let objects = fetch(for: object, predicate: predicate)
+  public func delete<O: NSManagedObject>(_ object: O.Type, predicate: NSPredicate? = nil) {
+    let objects = fetch(object, where: predicate)
 
     for object in objects {
       delete(object)
