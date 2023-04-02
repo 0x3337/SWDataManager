@@ -154,7 +154,7 @@ extension SWDataManager {
     having havingPredicate: NSPredicate? = nil,
     limit: Int = 0,
     offset: Int = 0
-  ) -> [Any] {
+  ) -> [NSDictionary] {
     var properties = [Any]()
 
     for attribute in attributes {
@@ -174,7 +174,8 @@ extension SWDataManager {
     }
 
     let entityName = entityName(for: object)
-    let request = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
+    let request = NSFetchRequest<NSDictionary>(entityName: entityName)
+    request.predicate = predicate
     request.resultType = .dictionaryResultType
     request.returnsObjectsAsFaults = false
     request.propertiesToFetch = properties
