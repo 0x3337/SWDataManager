@@ -19,8 +19,8 @@ class SWDataExpression: SWDataAttribute {
 
     super.init(value, nameAs: name)
   }
-
+  
   required convenience public init(stringLiteral value: String) {
-    self.init(stringLiteral: value)
+    fatalError("init(stringLiteral:) has not been implemented")
   }
 }

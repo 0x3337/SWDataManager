@@ -7,28 +7,36 @@
 
 import CoreData
 
-public class SWDataManager {
+public class SWDataManager: NSObject {
   public lazy var persistentContainer: NSPersistentContainer = {
-    let container = NSPersistentContainer(name: persistentContainerName)
+    let persistentContainer = NSPersistentContainer(name: persistentContainerName)
+    let description = persistentContainer.persistentStoreDescriptions.first
+    description?.shouldInferMappingModelAutomatically = false
 
-    container.loadPersistentStores() { description, error in
-      if let error = error {
-        fatalError("Failed to load Core Data stack: \(error)")
-      }
-    }
-
-    return container
+    return persistentContainer
   }()
 
   public lazy var context: NSManagedObjectContext = {
     let context = persistentContainer.viewContext
-    context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+    context.automaticallyMergesChangesFromParent = true
 
     return context
   }()
 
   public lazy var backgroundContext: NSManagedObjectContext = {
-    return persistentContainer.newBackgroundContext()
+    let context = persistentContainer.newBackgroundContext()
+    context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+
+    return context
+  }()
+
+  public var migrationSource: SWMigrationSource?
+
+  private lazy var migrationManager: SWMigrationManager = {
+    let migrationManager = SWMigrationManager(withPersistentContainer: persistentContainer)
+    migrationManager.migrationSource = migrationSource
+
+    return migrationManager
   }()
 
   private var persistentContainerName: String
@@ -190,13 +198,43 @@ extension SWDataManager {
 }
 
 extension SWDataManager {
+  public func loadPersistentStore(completion: @escaping () -> Void) {
+    migrateStoreIfNeeded { [self] in
+      persistentContainer.loadPersistentStores { _, error in
+        if let error = error {
+          fatalError("Failed to load Core Data stack: \(error)")
+        }
+
+        completion()
+      }
+    }
+  }
+
+  public func migrateStoreIfNeeded(completion: @escaping () -> Void) {
+    guard let storeURL = persistentContainer.persistentStoreDescriptions.first?.url else {
+        fatalError("persistentContainer was not set up properly")
+    }
+
+    if migrationManager.requiresMigration(at: storeURL) {
+      DispatchQueue.global(qos: .userInitiated).async { [self] in
+        migrationManager.migrateStore(at: storeURL)
+
+        DispatchQueue.main.async {
+          completion()
+        }
+      }
+    } else {
+      completion()
+    }
+  }
+
   public func save() {
     if context.hasChanges {
       do {
         try context.save()
       } catch {
-        let nserror = error as NSError
-        fatalError("Unresolved error \(nserror), \(nserror.userInfo)")
+        let nsError = error as NSError
+        fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
       }
     }
   }
