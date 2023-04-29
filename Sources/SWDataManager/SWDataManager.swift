@@ -122,6 +122,10 @@ extension SWDataManager {
     return fetch(object, where: NSPredicate(format: predicateFormat, argumentArray: args))
   }
 
+  public func fetchFirst<O: NSManagedObject>(_ object: O.Type, whereFormat predicateFormat: String, _ args: CVarArg...) -> O? {
+    return fetch(object, where: NSPredicate(format: predicateFormat, argumentArray: args), limit: 1).first
+  }
+
   public func resultsController<O: NSManagedObject>(
     for object: O.Type,
     where predicate: NSPredicate? = nil,
