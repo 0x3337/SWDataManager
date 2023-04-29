@@ -7,12 +7,21 @@
 
 import CoreData
 
+extension SWDataExpression {
+  enum AggregateFunction: String {
+    case min
+    case max
+    case sum
+    case count
+  }
+}
+
 class SWDataExpression: SWDataAttribute {
   let name: String
-  let function: SWAggregateFunction
+  let function: AggregateFunction
   let resultType: NSAttributeType
 
-  init(_ value: String, as name: String, function: SWAggregateFunction, resultType: NSAttributeType) {
+  init(_ value: String, as name: String, function: AggregateFunction, resultType: NSAttributeType) {
     self.name = name
     self.function = function
     self.resultType = resultType
