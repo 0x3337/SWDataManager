@@ -16,18 +16,11 @@ public class SWDataManager: NSObject {
     return persistentContainer
   }()
 
-  public lazy var context: NSManagedObjectContext = {
+  public lazy var context: SWDataContext = {
     let context = persistentContainer.viewContext
     context.automaticallyMergesChangesFromParent = true
 
-    return context
-  }()
-
-  public lazy var backgroundContext: NSManagedObjectContext = {
-    let context = persistentContainer.newBackgroundContext()
-    context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
-
-    return context
+    return SWDataContext(moc: context)
   }()
 
   public var migrationSource: SWMigrationSource?
@@ -44,160 +37,20 @@ public class SWDataManager: NSObject {
   public init(withPersistentContainerName persistentContainerName: String) {
     self.persistentContainerName = persistentContainerName
   }
-}
 
-extension SWDataManager {
-  private func entityName<O: NSManagedObject>(for object: O.Type) -> String {
+  public static func entityName<O: NSManagedObject>(for object: O.Type) -> String {
     if let object = object as? SWEntityNamable.Type {
       return object.entityName
     }
 
     return String(describing: object)
   }
-}
 
-extension SWDataManager {
-  public func insert<O: NSManagedObject>(for object: O.Type) -> O {
-    let entityName = entityName(for: object)
+  public func newBackgroundContext() -> SWDataContext {
+    let context = persistentContainer.newBackgroundContext()
+    context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
 
-    return NSEntityDescription.insertNewObject(forEntityName: entityName, into: context) as! O
-  }
-}
-
-extension SWDataManager {
-  public func delete(_ object: NSManagedObject) {
-    context.delete(object)
-  }
-
-  public func delete(by objectID: NSManagedObjectID) {
-    let object = context.object(with: objectID)
-
-    delete(object)
-  }
-
-  public func delete<O: NSManagedObject>(_ object: O.Type, predicate: NSPredicate? = nil) {
-    let objects = fetch(object, where: predicate)
-
-    for object in objects {
-      delete(object)
-    }
-  }
-}
-
-extension SWDataManager {
-  public func object(with objectID: NSManagedObjectID) -> NSManagedObject {
-    return context.object(with: objectID)
-  }
-
-  public func request<O: NSManagedObject>(
-    for object: O.Type,
-    where predicate: NSPredicate? = nil,
-    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
-    limit: Int = 0,
-    offset: Int = 0
-  ) -> NSFetchRequest<O> {
-    let entityName = entityName(for: object)
-    let request = NSFetchRequest<O>(entityName: entityName)
-    request.predicate = predicate
-    request.sortDescriptors = sortDescriptors
-    request.fetchLimit = limit
-    request.fetchOffset = offset
-
-    return request
-  }
-
-  public func fetch<O: NSManagedObject>(
-    _ object: O.Type,
-    where predicate: NSPredicate? = nil,
-    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
-    limit: Int = 0,
-    offset: Int = 0
-  ) -> [O] {
-    let request = request(for: object, where: predicate, orderBy: sortDescriptors, limit: limit, offset: offset)
-
-    return try! context.fetch(request)
-  }
-
-  public func fetch<O: NSManagedObject>(_ object: O.Type, whereFormat predicateFormat: String, _ args: CVarArg...) -> [O] {
-    return fetch(object, where: NSPredicate(format: predicateFormat, argumentArray: args))
-  }
-
-  public func fetchFirst<O: NSManagedObject>(_ object: O.Type, whereFormat predicateFormat: String, _ args: CVarArg...) -> O? {
-    return fetch(object, where: NSPredicate(format: predicateFormat, argumentArray: args), limit: 1).first
-  }
-
-  public func resultsController<O: NSManagedObject>(
-    for object: O.Type,
-    where predicate: NSPredicate? = nil,
-    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
-    limit: Int = 0,
-    offset: Int = 0
-  ) -> NSFetchedResultsController<O> {
-    let request = request(for: object, where: predicate, orderBy: sortDescriptors, limit: limit, offset: offset)
-    let fetchedResultsController = NSFetchedResultsController(fetchRequest: request, managedObjectContext: context, sectionNameKeyPath: nil, cacheName: nil)
-
-    do {
-      try fetchedResultsController.performFetch()
-    } catch {
-      fatalError("Failed to create FetchedResultsController: \(error)")
-    }
-
-    return fetchedResultsController
-  }
-}
-
-extension SWDataManager {
-  public func count<O: NSManagedObject>(for object: O.Type, where predicate: NSPredicate? = nil) -> Int {
-    let request = request(for: object, where: predicate)
-
-    return (try? context.count(for: request)) ?? 0
-  }
-
-  public func count<O: NSManagedObject>(for object: O.Type, whereFormat predicateFormat: String, _ args: CVarArg...) -> Int {
-    return count(for: object, where: NSPredicate(format: predicateFormat, argumentArray: args))
-  }
-
-  public func aggregate<O: NSManagedObject>(
-    for object: O.Type,
-    attributes: [SWDataAttribute],
-    where predicate: NSPredicate? = nil,
-    groupBy groups: [Any]? = nil,
-    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
-    having havingPredicate: NSPredicate? = nil,
-    limit: Int = 0,
-    offset: Int = 0
-  ) -> [NSDictionary] {
-    var properties = [Any]()
-
-    for attribute in attributes {
-      guard let expression = attribute as? SWDataExpression else {
-        properties.append(attribute.value)
-        continue
-      }
-
-      let description = NSExpressionDescription()
-      description.name = expression.name
-      description.expressionResultType = expression.resultType
-      description.expression = NSExpression(forFunction: "\(expression.function.rawValue):", arguments: [
-        NSExpression(forKeyPath: expression.value)
-      ])
-
-      properties.append(description)
-    }
-
-    let entityName = entityName(for: object)
-    let request = NSFetchRequest<NSDictionary>(entityName: entityName)
-    request.predicate = predicate
-    request.resultType = .dictionaryResultType
-    request.returnsObjectsAsFaults = false
-    request.propertiesToFetch = properties
-    request.propertiesToGroupBy = groups
-    request.havingPredicate = havingPredicate
-    request.sortDescriptors = sortDescriptors
-    request.fetchLimit = limit
-    request.fetchOffset = offset
-
-    return try! context.fetch(request)
+    return SWDataContext(moc: context)
   }
 }
 
@@ -231,15 +84,110 @@ extension SWDataManager {
       completion()
     }
   }
+}
+
+extension SWDataManager {
+  public func insert<O: NSManagedObject>(for object: O.Type) -> O {
+    return context.insert(for: object)
+  }
+
+  public func delete(_ object: NSManagedObject) {
+    context.delete(object)
+  }
+
+  public func delete(by objectID: NSManagedObjectID) {
+    context.delete(by: objectID)
+  }
+
+  public func delete<O: NSManagedObject>(_ object: O.Type, predicate: NSPredicate? = nil) {
+    context.delete(object, predicate: predicate)
+  }
+
+  public func delete<O: NSManagedObject>(for object: O.Type, whereFormat predicateFormat: String, _ args: CVarArg...) {
+    context.delete(for: object, whereFormat: predicateFormat, args)
+  }
+
+  public func object(with objectID: NSManagedObjectID) -> NSManagedObject {
+    return context.object(with: objectID)
+  }
+
+  public func request<O: NSManagedObject>(
+    for object: O.Type,
+    where predicate: NSPredicate? = nil,
+    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
+    limit: Int = 0,
+    offset: Int = 0
+  ) -> NSFetchRequest<O> {
+    return context.request(for: object, where: predicate, orderBy: sortDescriptors, limit: limit, offset: offset)
+  }
+
+  public func fetch<O: NSManagedObject>(
+    _ object: O.Type,
+    where predicate: NSPredicate? = nil,
+    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
+    limit: Int = 0,
+    offset: Int = 0
+  ) -> [O] {
+    return context.fetch(object, where: predicate, orderBy: sortDescriptors, limit: limit, offset: offset)
+  }
+
+  public func fetch<O: NSManagedObject>(_ object: O.Type, whereFormat predicateFormat: String, _ args: CVarArg...) -> [O] {
+    return context.fetch(object, whereFormat: predicateFormat, args)
+  }
+
+  public func fetchFirst<O: NSManagedObject>(_ object: O.Type, whereFormat predicateFormat: String, _ args: CVarArg...) -> O? {
+    return context.fetchFirst(object, whereFormat: predicateFormat, args)
+  }
+
+  public func resultsController<O: NSManagedObject>(
+    for object: O.Type,
+    where predicate: NSPredicate? = nil,
+    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
+    limit: Int = 0,
+    offset: Int = 0
+  ) -> NSFetchedResultsController<O> {
+    return context.resultsController(for: object, where: predicate, orderBy: sortDescriptors, limit: limit, offset: offset)
+  }
+
+  public func count<O: NSManagedObject>(for object: O.Type, where predicate: NSPredicate? = nil) -> Int {
+    return context.count(for: object, where: predicate)
+  }
+
+  public func count<O: NSManagedObject>(for object: O.Type, whereFormat predicateFormat: String, _ args: CVarArg...) -> Int {
+    return context.count(for: object, whereFormat: predicateFormat, args)
+  }
+
+  public func aggregate<O: NSManagedObject>(
+    for object: O.Type,
+    attributes: [SWDataAttribute],
+    where predicate: NSPredicate? = nil,
+    groupBy groups: [Any]? = nil,
+    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
+    having havingPredicate: NSPredicate? = nil,
+    limit: Int = 0,
+    offset: Int = 0
+  ) -> [NSDictionary] {
+    return context.aggregate(
+      for: object,
+      attributes: attributes,
+      where: predicate,
+      groupBy: groups,
+      orderBy: sortDescriptors,
+      having: havingPredicate,
+      limit: limit,
+      offset: offset
+    )
+  }
 
   public func save() {
-    if context.hasChanges {
-      do {
-        try context.save()
-      } catch {
-        let nsError = error as NSError
-        fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-      }
-    }
+    context.save()
+  }
+
+  public func perform(_ block: @escaping () -> Void) {
+    context.perform(block)
+  }
+
+  public func performAndWait(_ block: () -> Void) {
+    context.performAndWait(block)
   }
 }
