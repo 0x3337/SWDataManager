@@ -132,7 +132,7 @@ extension SWDataContext {
 
     for attribute in attributes {
       guard let expression = attribute as? SWDataExpression else {
-        properties.append(attribute.value)
+        properties.append(attribute.key)
         continue
       }
 
@@ -140,7 +140,7 @@ extension SWDataContext {
       description.name = expression.name
       description.expressionResultType = expression.resultType
       description.expression = NSExpression(forFunction: "\(expression.function.rawValue):", arguments: [
-        NSExpression(forKeyPath: expression.value)
+        NSExpression(forKeyPath: expression.key)
       ])
 
       properties.append(description)

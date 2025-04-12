@@ -21,14 +21,14 @@ class SWDataExpression: SWDataAttribute {
   let function: AggregateFunction
   let resultType: NSAttributeType
 
-  init(_ value: String, as name: String, function: AggregateFunction, resultType: NSAttributeType) {
+  init(_ key: String, as name: String, function: AggregateFunction, resultType: NSAttributeType) {
     self.name = name
     self.function = function
     self.resultType = resultType
 
-    super.init(value, nameAs: name)
+    super.init(key)
   }
-  
+
   required convenience public init(stringLiteral value: String) {
     fatalError("init(stringLiteral:) has not been implemented")
   }

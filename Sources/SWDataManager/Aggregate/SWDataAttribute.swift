@@ -8,29 +8,29 @@
 import CoreData
 
 public class SWDataAttribute: NSObject, ExpressibleByStringLiteral {
-  let value: String
+  let key: String
 
-  init(_ value: String, nameAs name: String? = nil) {
-    self.value = value
+  init(_ key: String) {
+    self.key = key
   }
 
-  required convenience public init(stringLiteral value: String) {
-    self.init(value)
+  required convenience public init(stringLiteral key: String) {
+    self.init(key)
   }
 
-  public class func sum(_ value: String, as name: String = "sum", resultType: NSAttributeType) -> SWDataAttribute {
-    return SWDataExpression(value, as: name, function: .sum, resultType: resultType)
+  public class func sum(_ key: String, as name: String = "sum", resultType: NSAttributeType) -> SWDataAttribute {
+    return SWDataExpression(key, as: name, function: .sum, resultType: resultType)
   }
 
-  public class func count(_ value: String, as name: String = "count", resultType: NSAttributeType) -> SWDataAttribute {
-    return SWDataExpression(value, as: name, function: .count, resultType: resultType)
+  public class func count(_ key: String, as name: String = "count", resultType: NSAttributeType) -> SWDataAttribute {
+    return SWDataExpression(key, as: name, function: .count, resultType: resultType)
   }
 
-  public class func min(_ value: String, as name: String = "min", resultType: NSAttributeType) -> SWDataAttribute {
-    return SWDataExpression(value, as: name, function: .min, resultType: resultType)
+  public class func min(_ key: String, as name: String = "min", resultType: NSAttributeType) -> SWDataAttribute {
+    return SWDataExpression(key, as: name, function: .min, resultType: resultType)
   }
 
-  public class func max(_ value: String, as name: String = "max", resultType: NSAttributeType) -> SWDataAttribute {
-    return SWDataExpression(value, as: name, function: .max, resultType: resultType)
+  public class func max(_ key: String, as name: String = "max", resultType: NSAttributeType) -> SWDataAttribute {
+    return SWDataExpression(key, as: name, function: .max, resultType: resultType)
   }
 }
