@@ -33,6 +33,8 @@ public class SWDataManager: NSObject {
   }()
 
   private var persistentContainerName: String
+  private var isPersistentStoreLoaded = false
+  private var persistentStoreCompletions = [() -> Void]()
 
   public init(withPersistentContainerName persistentContainerName: String) {
     self.persistentContainerName = persistentContainerName
@@ -48,13 +50,28 @@ public class SWDataManager: NSObject {
 
 extension SWDataManager {
   public func loadPersistentStore(completion: @escaping () -> Void) {
+    guard !isPersistentStoreLoaded else {
+      completion()
+      return
+    }
+
+    persistentStoreCompletions.append(completion)
+
+    guard persistentStoreCompletions.count == 1 else {
+      return
+    }
+
     migrateStoreIfNeeded { [self] in
-      persistentContainer.loadPersistentStores { _, error in
+      persistentContainer.loadPersistentStores { [self] _, error in
         if let error = error {
           fatalError("Failed to load Core Data stack: \(error)")
         }
 
-        completion()
+        isPersistentStoreLoaded = true
+
+        let completions = persistentStoreCompletions
+        persistentStoreCompletions.removeAll()
+        completions.forEach { $0() }
       }
     }
   }
