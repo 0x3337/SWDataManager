@@ -26,7 +26,7 @@ public class SWDataManager: NSObject {
   public var migrationSource: SWMigrationSource?
 
   private lazy var migrationManager: SWMigrationManager = {
-    let migrationManager = SWMigrationManager(withPersistentContainer: persistentContainer)
+    let migrationManager = SWMigrationManager(name: persistentContainerName)
     migrationManager.migrationSource = migrationSource
 
     return migrationManager
@@ -36,14 +36,6 @@ public class SWDataManager: NSObject {
 
   public init(withPersistentContainerName persistentContainerName: String) {
     self.persistentContainerName = persistentContainerName
-  }
-
-  public static func entityName<O: NSManagedObject>(for object: O.Type) -> String {
-    if let object = object as? SWEntityNamable.Type {
-      return object.entityName
-    }
-
-    return String(describing: object)
   }
 
   public func newBackgroundContext() -> SWDataContext {
@@ -67,21 +59,33 @@ extension SWDataManager {
     }
   }
 
-  public func migrateStoreIfNeeded(completion: @escaping () -> Void) {
-    guard let storeURL = persistentContainer.persistentStoreDescriptions.first?.url else {
-        fatalError("persistentContainer was not set up properly")
+  public var requiresMigration: Bool {
+    guard
+      let storeURL = persistentContainer.persistentStoreDescriptions.first?.url,
+      let metadata = NSPersistentStoreCoordinator.metadata(at: storeURL)
+    else {
+      return false
     }
 
-    if migrationManager.requiresMigration(at: storeURL) {
-      DispatchQueue.global(qos: .userInitiated).async { [self] in
-        migrationManager.migrateStore(at: storeURL)
+    return !persistentContainer.managedObjectModel.isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata)
+  }
 
-        DispatchQueue.main.async {
-          completion()
-        }
-      }
-    } else {
+  public func migrateStoreIfNeeded(completion: @escaping () -> Void) {
+    guard let storeURL = persistentContainer.persistentStoreDescriptions.first?.url else {
+      fatalError("persistentContainer was not set up properly")
+    }
+
+    guard migrationSource != nil, requiresMigration else {
       completion()
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async { [self] in
+      migrationManager.migrateStore(at: storeURL)
+
+      DispatchQueue.main.async {
+        completion()
+      }
     }
   }
 }
@@ -109,16 +113,6 @@ extension SWDataManager {
 
   public func object(with objectID: NSManagedObjectID) -> NSManagedObject {
     return context.object(with: objectID)
-  }
-
-  public func request<O: NSManagedObject>(
-    for object: O.Type,
-    where predicate: NSPredicate? = nil,
-    orderBy sortDescriptors: [NSSortDescriptor]? = nil,
-    limit: Int = 0,
-    offset: Int = 0
-  ) -> NSFetchRequest<O> {
-    return context.request(for: object, where: predicate, orderBy: sortDescriptors, limit: limit, offset: offset)
   }
 
   public func fetch<O: NSManagedObject>(

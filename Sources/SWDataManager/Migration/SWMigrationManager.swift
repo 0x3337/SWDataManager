@@ -7,33 +7,21 @@
 
 import CoreData
 
-class SWMigrationManager: NSObject {
+public class SWMigrationManager: NSObject {
   public weak var migrationSource: SWMigrationSource?
 
-  private let persistentContainer: NSPersistentContainer
+  private let name: String
+  private let bundle: Bundle
 
-  init(withPersistentContainer persistentContainer: NSPersistentContainer) {
-    self.persistentContainer = persistentContainer
+  public init(name: String, bundle: Bundle = .main) {
+    self.name = name
+    self.bundle = bundle
   }
 }
 
 extension SWMigrationManager {
-  func requiresMigration(at storeURL: URL) -> Bool {
-    guard
-      let metadata = try? NSPersistentStoreCoordinator.metadataForPersistentStore(ofType: NSSQLiteStoreType, at: storeURL, options: nil),
-      let lastVersion = migrationSource?.migrationSteps().last?.destinationVersion
-    else {
-      return false
-    }
-
-    return !managedObjectModel(forVersion: lastVersion).isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata)
-  }
-
   func migrateStore(at storeURL: URL) {
-    guard
-      let metadata = NSPersistentStoreCoordinator.metadata(at: storeURL),
-      let migrationSteps = migrationSource?.migrationSteps()
-    else {
+    guard let migrationSteps = migrationSource?.migrationSteps() else {
       return
     }
 
@@ -42,67 +30,109 @@ extension SWMigrationManager {
     var currentURL = storeURL
 
     for step in migrationSteps {
-      let sourceModel = managedObjectModel(forVersion: step.sourceVersion)
-      let destinationModel = managedObjectModel(forVersion: step.destinationVersion)
-
-      guard let mapping = NSMappingModel(from: [Bundle.main], forSourceModel: sourceModel, destinationModel: destinationModel) else {
-        fatalError("Mapping model not found")
-      }
-
-      if !sourceModel.isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata) {
+      guard
+        let metadata = NSPersistentStoreCoordinator.metadata(at: currentURL),
+        managedObjectModel(forVersion: step.sourceVersion).isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata)
+      else {
         continue
       }
 
-      let manager = NSMigrationManager(sourceModel: sourceModel, destinationModel: destinationModel)
-      let destinationURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
-
-      do {
-          try manager.migrateStore(
-            from: currentURL,
-            sourceType: NSSQLiteStoreType,
-            options: nil,
-            with: mapping,
-            toDestinationURL: destinationURL,
-            destinationType: NSSQLiteStoreType,
-            destinationOptions: nil
-          )
-      } catch let error {
-          fatalError("Failed attempting to migrate from v\(step.sourceVersion) to v\(step.destinationVersion), error: \(error)")
-      }
+      let destinationURL = migrateStore(at: currentURL, from: step.sourceVersion, to: step.destinationVersion)
 
       if currentURL != storeURL {
-          // Destroy intermediate step's store
-          NSPersistentStoreCoordinator.destroyStore(at: currentURL)
+        NSPersistentStoreCoordinator.destroyStore(at: currentURL)
       }
 
       currentURL = destinationURL
     }
 
-    NSPersistentStoreCoordinator.replaceStore(at: storeURL, withStoreAt: currentURL)
-
-    if (currentURL != storeURL) {
-      NSPersistentStoreCoordinator.destroyStore(at: currentURL)
+    guard currentURL != storeURL else {
+      return
     }
+
+    NSPersistentStoreCoordinator.replaceStore(at: storeURL, withStoreAt: currentURL)
+    NSPersistentStoreCoordinator.destroyStore(at: currentURL)
   }
 }
 
-private extension SWMigrationManager {
-  func managedObjectModel(forVersion version: Int) -> NSManagedObjectModel {
+extension SWMigrationManager {
+  public func managedObjectModel(forVersion version: Int) -> NSManagedObjectModel {
     let name = resourceName(forVersion: version)
-    let omoURL = Bundle.main.url(forResource: name, withExtension: "omo", subdirectory: "\(persistentContainer.name).momd")
-    let momURL = Bundle.main.url(forResource: name, withExtension: "mom", subdirectory: "\(persistentContainer.name).momd")
+    let omoURL = bundle.url(forResource: name, withExtension: "omo", subdirectory: "\(self.name).momd")
+    let momURL = bundle.url(forResource: name, withExtension: "mom", subdirectory: "\(self.name).momd")
 
     guard let url = omoURL ?? momURL else {
-        fatalError("Unable to find model in bundle")
+      fatalError("Unable to find model v\(version) in bundle")
     }
 
     guard let model = NSManagedObjectModel(contentsOf: url) else {
-        fatalError("Unable to load model in bundle")
+      fatalError("Unable to load model v\(version) in bundle")
     }
 
     return model
   }
 
+  public func context(forVersion version: Int, at storeURL: URL) -> SWDataContext {
+    let coordinator = NSPersistentStoreCoordinator(managedObjectModel: managedObjectModel(forVersion: version))
+    _ = coordinator.addPersistentStore(at: storeURL, options: [NSSQLitePragmasOption: ["journal_mode": "DELETE"]])
+
+    let context = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
+    context.persistentStoreCoordinator = coordinator
+
+    return SWDataContext(moc: context)
+  }
+
+  @discardableResult
+  public func migrateStore(at storeURL: URL, from sourceVersion: Int, to destinationVersion: Int) -> URL {
+    let sourceModel = managedObjectModel(forVersion: sourceVersion)
+    let destinationModel = managedObjectModel(forVersion: destinationVersion)
+
+    guard let mapping = NSMappingModel(from: [bundle], forSourceModel: sourceModel, destinationModel: destinationModel) else {
+      fatalError("Mapping model not found for v\(sourceVersion) -> v\(destinationVersion)")
+    }
+
+    let destinationURL = temporaryStoreURL()
+
+    do {
+      try NSMigrationManager(sourceModel: sourceModel, destinationModel: destinationModel).migrateStore(
+        from: storeURL,
+        sourceType: NSSQLiteStoreType,
+        options: nil,
+        with: mapping,
+        toDestinationURL: destinationURL,
+        destinationType: NSSQLiteStoreType,
+        destinationOptions: nil
+      )
+    } catch let error {
+      fatalError("Failed attempting to migrate from v\(sourceVersion) to v\(destinationVersion), error: \(error)")
+    }
+
+    return destinationURL
+  }
+
+  public func migratedContext(
+    from sourceVersion: Int,
+    to destinationVersion: Int,
+    populate: (SWDataContext) throws -> Void
+  ) rethrows -> SWDataContext {
+    let storeURL = temporaryStoreURL()
+    let sourceContext = context(forVersion: sourceVersion, at: storeURL)
+
+    try populate(sourceContext)
+    sourceContext.save()
+    sourceContext.removePersistentStores()
+
+    var currentURL = storeURL
+
+    for version in sourceVersion..<destinationVersion {
+      currentURL = migrateStore(at: currentURL, from: version, to: version + 1)
+    }
+
+    return context(forVersion: destinationVersion, at: currentURL)
+  }
+}
+
+private extension SWMigrationManager {
   func managedObjectModel(compatibleWithStoreMetadata metadata: [String : Any]) -> NSManagedObjectModel? {
     guard let migrationSteps = migrationSource?.migrationSteps() else {
       return nil
@@ -121,10 +151,14 @@ private extension SWMigrationManager {
 
   func resourceName(forVersion version: Int) -> String {
     if version == 1 {
-        return persistentContainer.name
+      return name
     } else {
-        return "\(persistentContainer.name) \(version)"
+      return "\(name) \(version)"
     }
+  }
+
+  func temporaryStoreURL() -> URL {
+    return FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
   }
 
   func forceWALCheckpointingForStore(at storeURL: URL) {
